@@ -1,0 +1,87 @@
+#!/usr/bin/python3
+
+import Crypto.Cipher.AES as AES
+import string, random, os, time, mimetypes
+
+def padKey(key):
+
+    if len(key) == 16 : return key.encode("utf-8")
+
+    random.seed(key)
+    padding = [random.choice(string.printable) for i in range( 16 - len(key))]
+
+    return (key + "".join(padding)).encode("utf-8")
+
+def encrypt(filePath, key):
+
+    fileExtension = os.path.splitext(filePath)[1]
+
+    aes = AES.new(key, AES.MODE_CFB, 16 * "\x00")
+
+    with open(filePath, "rb") as inputFile:
+
+        with open(filePath + ".sdk", "wb") as outputFile:
+
+            outputFile.write((fileExtension + "\n").encode("utf-8"))
+
+            outputFile.write(aes.encrypt(inputFile.read()))
+
+    print("Successfully encrypted file")
+
+
+def decrypt(filePath, key):
+
+    oldFileName, oldFileExtension = os.path.splitext(filePath)
+    tempFileName = filePath + time.asctime()
+
+    aes = AES.new(key, AES.MODE_CFB, 16 * "\x00")
+
+    with open(filePath, "rb") as inputFile:
+
+        with open(tempFileName, "wb") as outputFile:
+
+            newFileExtension = inputFile.readline().decode("utf-8").rstrip("\n")
+
+            outputFile.write(aes.decrypt(inputFile.read()))
+
+    os.rename(tempFileName, oldFileName + newFileExtension)
+
+    print("Successfully decrypted file")
+
+def takeInput():
+
+    while True :
+        filePath = input("Enter file path : ")
+        if os.path.exists(filePath): break
+        print("*** Invalid File Path ***")
+
+    print()
+
+    while True :
+        key = input("Enter 8 - 16 len key : ")
+        if 8 <= len(key) <= 16 : break
+        print("*** Invalid key, key should be 8 / 16 characters long ***")
+    key = padKey(key)
+
+    return filePath, key
+
+while True:
+
+    print("1. Encrypt")
+    print("2. Decrypt")
+    print("3. Exit")
+    choice = input("Enter your choice : ")
+
+    try:
+        choice = int(choice)
+        if choice == 1 :
+            filePath, key = takeInput()
+            encrypt(filePath, key)
+        elif choice == 2 :
+            filePath, key = takeInput()
+            decrypt(filePath, key)
+        elif choice == 3 :
+            break
+        else:
+            raise ValueError()
+    except ValueError: print("\n** Invalid Choice **\n")
