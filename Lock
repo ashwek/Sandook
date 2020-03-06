@@ -1,7 +1,8 @@
 #!/usr/bin/python3
 
 import Crypto.Cipher.AES as AES
-import string, random, os, time, mimetypes
+import Crypto.Hash.SHA256 as SHA256
+import string, random, os, time, mimetypes, zipfile, sys
 
 def padKey(key):
 
@@ -12,39 +13,107 @@ def padKey(key):
 
     return (key + "".join(padding)).encode("utf-8")
 
-def encrypt(filePath, key):
+def traverseDirectories(pathList):
 
-    fileExtension = os.path.splitext(filePath)[1]
+    for eachPath in pathList:
 
-    aes = AES.new(key, AES.MODE_CFB, 16 * "\x00")
+        if os.path.isdir(eachPath):
+            for dirPath, dirList, files in os.walk(eachPath):
+                for each in files:
+                    yield os.path.join(dirPath, each)
+        else:
+            yield eachPath
 
-    with open(filePath, "rb") as inputFile:
+def encrypt(filePathList, key):
 
-        with open(filePath + ".sdk", "wb") as outputFile:
+    if len(filePathList) == 0 :
+        return
 
-            outputFile.write((fileExtension + "\n").encode("utf-8"))
+    encryptedFileDirectory = os.path.dirname(filePathList[0])
 
-            outputFile.write(aes.encrypt(inputFile.read()))
+    if len(filePathList) == 1 :
+        encryptedFileName = os.path.basename(filePathList[0])
+    else:
+        encryptedFileName = "Encrypted " + time.ctime()
+
+    encryptedFilePath = os.path.join(encryptedFileDirectory, encryptedFileName + ".sdk")
+
+    with zipfile.ZipFile(os.path.relpath(encryptedFilePath), "w") as zipFile:
+
+        with zipFile.open("key.encr", "w") as keyFile:
+            keyFile.write(SHA256.new(key).digest())
+
+        for eachFilePath in traverseDirectories(filePathList):
+
+            encrypter = AES.new(key, AES.MODE_CFB, 16 * "\x00")
+
+            with open(eachFilePath, "rb") as inputFile:
+
+                fileExtension = os.path.splitext(eachFilePath)[1]
+
+                with zipFile.open(os.path.relpath(eachFilePath) + ".enr", "w") as outputFile:
+                    outputFile.write((fileExtension + "\n").encode("utf-8"))
+                    outputFile.write(encrypter.encrypt(inputFile.read()))
 
     print("Successfully encrypted file")
 
 
-def decrypt(filePath, key):
+def decrypt(filePathList, key):
 
-    oldFileName, oldFileExtension = os.path.splitext(filePath)
-    tempFileName = filePath + time.asctime()
+    if len(filePathList) > 1 :
+        print("Cannot Decrypt Multiple Files")
+        return
 
-    aes = AES.new(key, AES.MODE_CFB, 16 * "\x00")
+    filePath = filePathList[0]
 
-    with open(filePath, "rb") as inputFile:
+    if os.path.isdir(filePath) :
+        print("Cannot decrypt directory")
+        return
 
-        with open(tempFileName, "wb") as outputFile:
+    decryptedFileName = os.path.splitext(os.path.basename(filePath))[0]
 
-            newFileExtension = inputFile.readline().decode("utf-8").rstrip("\n")
+    decryptedFilePath = os.path.join(os.path.dirname(filePath), decryptedFileName)
+    os.mkdir(decryptedFilePath)
 
-            outputFile.write(aes.decrypt(inputFile.read()))
+    with zipfile.ZipFile(filePath, "r") as encrFile:
 
-    os.rename(tempFileName, oldFileName + newFileExtension)
+        if( "key.encr" not in encrFile.namelist() ):
+            print("Cannot decrypt File")
+            return
+
+        with encrFile.open("key.encr", "r") as keyFile:
+            if SHA256.new(key).digest() != keyFile.read() :
+                print("Incorrect Key")
+                return
+
+        fileList = encrFile.infolist()
+
+        for eachFile in fileList:
+
+            if eachFile.is_dir():
+                os.mkdir(os.path.join(decryptedFilePath, eachFile.filename))
+                continue
+
+            if eachFile.filename == "key.encr" :
+                continue
+
+            with encrFile.open(eachFile.filename, "r") as inputFile:
+
+                decrypter = AES.new(key, AES.MODE_CFB, 16 * "\x00")
+
+                if not os.path.exists(os.path.dirname(os.path.join(decryptedFilePath, eachFile.filename))):
+                    os.makedirs(os.path.dirname(os.path.join(decryptedFilePath, eachFile.filename)))
+
+                with open(os.path.join(decryptedFilePath, eachFile.filename), "wb") as outputFile:
+
+                    newFileExtension = inputFile.readline().decode("utf-8").rstrip("\n")
+                    outputFile.write(decrypter.decrypt(inputFile.read()))
+
+                newFileName = os.path.splitext(eachFile.filename)[0]
+                if not newFileName.endswith(newFileExtension):
+                    newFileName += newFileExtension
+
+                os.rename(os.path.join(decryptedFilePath, eachFile.filename), os.path.join(decryptedFilePath, newFileName))
 
     print("Successfully decrypted file")
 
@@ -75,13 +144,15 @@ while True:
     try:
         choice = int(choice)
         if choice == 1 :
-            filePath, key = takeInput()
+            filePath = ["../path1/..", "../path2/.."]
+            key = padKey("key")
             encrypt(filePath, key)
         elif choice == 2 :
-            filePath, key = takeInput()
+            filePath = ["../path/.."]
+            key = padKey("key")
             decrypt(filePath, key)
         elif choice == 3 :
             break
         else:
             raise ValueError()
-    except ValueError: print("\n** Invalid Choice **\n")
+    except ValueError: print("\n** Invalid Choice **\n", sys.exc_info())
