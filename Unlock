@@ -1,0 +1,211 @@
+#!/usr/bin/python3
+
+import Crypto.Cipher.AES as AES
+import Crypto.Hash.SHA256 as SHA256
+
+import string, random, os, zipfile
+
+from tkinter import *
+from tkinter.ttk import Progressbar
+
+
+def padKey(key):
+
+    """
+        pad key to get key
+        of length 16
+    """
+
+    # if key length is 16, return it
+    if len(key) == 16 : return key.encode("utf-8")
+
+    # use key as seed value and generate characters to pad key
+    random.seed(key)
+    padding = [random.choice(string.printable) for i in range( 16 - len(key))]
+
+    # return byte-array of key
+    return (key + "".join(padding)).encode("utf-8")
+
+
+def decrypt(filePath, key):
+
+    # get decrypted file name and path
+    decryptedFileName = os.path.splitext(os.path.basename(filePath))[0]
+    decryptedFilePath = os.path.join(os.path.dirname(filePath), decryptedFileName)
+
+    # read encrypted file
+    with zipfile.ZipFile(filePath, "r") as encrFile:
+
+        # check if key.encr exists in the encrypted zip
+        if( "key.encr" not in encrFile.namelist() ):
+            errorLabel.config(text = "Unable to decrypt this file, choose a valid file")
+            errorLabel.pack(side = TOP, fill = X, expand = True)
+            return
+
+        # check if entered password is correct or not
+        with encrFile.open("key.encr", "r") as keyFile:
+            if SHA256.new(key).digest() != keyFile.read() :
+                errorLabel.config(text = "Incorrect Password")
+                errorLabel.pack(side = TOP, fill = X, expand = True)
+                return
+
+
+        # if key is valid:
+        # make directory to extract decrypted files
+        # disable keyInput and Decryption button
+        # and show progress frame
+        os.mkdir(decryptedFilePath)
+        keyEntry.config(state = DISABLED)
+        decryptButton.config(state = DISABLED)
+        progressFrame.pack(side = TOP, fill = BOTH, expand = True, padx = 10, pady = 10)
+        progressFrame.update()
+
+        # get list of files in the encrypted zip
+        fileList = encrFile.infolist()
+
+        # get stepSize to update progress bar after decrypting each file
+        stepSize = ((1 / (len(fileList) - 1)) * 100)
+        currentProgress = 0
+
+        for eachFile in fileList:
+
+            if eachFile.is_dir():
+                os.mkdir(os.path.join(decryptedFilePath, eachFile.filename))
+                continue
+
+            # skip file named key.encr
+            if eachFile.filename == "key.encr" :
+                continue
+
+            # display currently decrypting file name
+            progressTitle.config(text = "Decrypting {}...".format(eachFile.filename))
+            progressTitle.update()
+
+            with encrFile.open(eachFile.filename, "r") as inputFile:
+
+                decrypter = AES.new(key, AES.MODE_CFB, 16 * "\x00")
+
+                # if the parent directory of any files dosent exists, make directory
+                if not os.path.exists(os.path.dirname(os.path.join(decryptedFilePath, eachFile.filename))):
+                    os.makedirs(os.path.dirname(os.path.join(decryptedFilePath, eachFile.filename)))
+
+                # read encrypted file, get the file extension from first line
+                # decrypt and store file
+                with open(os.path.join(decryptedFilePath, eachFile.filename), "wb") as outputFile:
+                    newFileExtension = inputFile.readline().decode("utf-8").rstrip("\n")
+                    outputFile.write(decrypter.decrypt(inputFile.read()))
+
+                # change file extension if required
+                newFileName = os.path.splitext(eachFile.filename)[0]
+                if not newFileName.endswith(newFileExtension):
+                    newFileName += newFileExtension
+
+                os.rename(os.path.join(decryptedFilePath, eachFile.filename), os.path.join(decryptedFilePath, newFileName))
+
+            # update progress bar after decrypting a file
+            currentProgress += stepSize
+            progressBar.config(value = currentProgress)
+            progressBar.update()
+
+    # change progress title and end message after decrypting is complete
+    progressTitle.config(text = "Decrypted!!")
+    progressTitle.update()
+
+    endMessage.config(text = "Decrypted into \"{}\" directory".format(decryptedFileName))
+    endMessage.pack(side = TOP, fill = X, expand = True, padx = 10, pady = 10)
+
+
+def validate():
+
+    """
+        This method is called when
+        DECRYPT button is pressed
+    """
+
+    # hide error frame
+    errorLabel.pack_forget()
+
+    # get input from Entry
+    key = keyInput.get()
+
+    # key / password show have 8 - 16 characters
+    if len(key) < 8 or len(key) > 16 :
+        errorLabel.config(text = "Password has to be 8 - 16 characters long")
+        errorLabel.pack(fill = BOTH, side = TOP, padx = 5, pady = 20)
+        return
+
+    key = padKey(key)
+    decrypt(filePathList[0], key)
+
+
+# get path of selected files
+filePathList = os.environ["NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"].split("\n")
+filePathList.pop()   # remove empty entry
+
+
+window = Tk()
+window.minsize(300, 150)
+window.title("Unlock - Decrypt")
+
+
+### Error Label
+errorLabel = Label(window, fg = "RED", text = "This is Error", font = ('Arial', 12), wraplength = 200)
+
+
+### can decrypt only 1 file at a time
+if len(filePathList) == 1 and os.path.isfile(filePathList[0]):
+
+    ### Heading
+    headingLabelText = StringVar()
+    headingLabelText.set("File to decrypt :")
+    headingLabel = Label(window, textvariable = headingLabelText)
+    headingLabel.pack(side = TOP, pady = 10)
+
+
+    ### Selected File
+    selectedFile = Label(window, text = os.path.relpath(filePathList[0]), wraplength = 200, font = ("Arial", 12, "bold"))
+    selectedFile.pack(side = TOP, fill = X, expand = True, padx = 10, pady = 10)
+
+
+    ### key input
+    keyInputFrame = Frame(window)
+    keyInputFrame.pack(side = TOP, padx = 10, pady = 10)
+
+    keyLabelText = StringVar()
+    keyLabelText.set("Password ")
+    keyLabel = Label(keyInputFrame, textvariable = keyLabelText)
+    keyLabel.pack(side = LEFT)
+
+    keyInput = StringVar()
+    keyEntry = Entry(keyInputFrame, exportselection = False, textvariable = keyInput, show = "*", width = 18)
+    keyEntry.pack(side = LEFT)
+
+
+    ### Decrypt Button
+    decryptButton = Button(window, text = "Decrypt", command = validate)
+    decryptButton.pack(side = TOP, pady = 10)
+
+
+    ### Progress frame
+    progressFrame = Frame(window)
+    progressTitle = Label(progressFrame, anchor = 'w', wraplength = 200)
+    progressTitle.pack(side = TOP, fill = X, expand = True, padx = 10)
+    progressBar = Progressbar(progressFrame, orient = HORIZONTAL)
+    progressBar.pack(side = TOP, fill = BOTH, expand = True, padx = 10, pady = 10)
+
+
+    ### End message
+    endMessage = Label(window, wraplength = 200)
+
+### if more than 1 files are selected
+elif len(filePathList) > 1 :
+    errorLabel.config(text = "Cannot decrypt multiple files at once, choose individual files")
+    errorLabel.pack(side = TOP, fill = X, expand = True)
+
+### if selected file is a directory
+else:
+    errorLabel.config(text = "Cannot decrypt folder, choose valid encrypted file")
+    errorLabel.pack(side = TOP, fill = X, expand = True)
+
+
+window.mainloop()
