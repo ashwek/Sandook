@@ -1,9 +1,13 @@
 # Sandook
 
-Encrypting / Decrypting files throigh **Nautilus-Script**
+Encrypting / Decrypting files through **Nautilus-Script**
 
 ----
 
-## Encrypting Multiple Files using __Lock__ script
+## Encrypting Multiple Files using [_Lock_](./Lock) script
 
 ![Multiple Files Encryption](./img/Multiple_Files_Encryption.gif)
+
+## Decrypting Files using [_Unlock_](./Unlock) script
+
+![Files Decryption](./img/Files_Decryption.gif)
