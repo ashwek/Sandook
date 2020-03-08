@@ -1,6 +1,9 @@
 #!/usr/bin/python3
 
 import Crypto.Cipher.AES as AES
+import Crypto.Cipher.ARC2 as RC2
+import Crypto.Cipher.Blowfish as Blowfish
+import Crypto.Cipher.DES3 as DES3
 import Crypto.Hash.SHA256 as SHA256
 
 import string, random, os, zipfile
@@ -39,6 +42,20 @@ def generateFileName(filePath, fileExtension):
     return "{} ({}){}".format(filePath, counter, fileExtension)
 
 
+def getDecrypter(key):
+
+    decryptionType = selectedDecryptionMethod.get()
+
+    if decryptionType == 1:
+        return AES.new(key, AES.MODE_CFB, 16 * "\x00")
+    elif decryptionType == 2:
+        return RC2.new(key, RC2.MODE_CFB, 8 * "\x00")
+    elif decryptionType == 3:
+        return Blowfish.new(key, Blowfish.MODE_CFB, 8 * "\x00")
+    elif decryptionType == 4:
+        return DES3.new(key, DES3.MODE_CFB, 8 * "\x00")
+
+
 def decrypt(filePath, key):
 
     # get decrypted file name and path
@@ -56,11 +73,10 @@ def decrypt(filePath, key):
 
         # check if entered password is correct or not
         with encrFile.open("key.encr", "r") as keyFile:
-            if SHA256.new(key).digest() != keyFile.read() :
-                errorLabel.config(text = "Incorrect Password")
+            if SHA256.new(key).digest()+SHA256.new(str(selectedDecryptionMethod.get()).encode("utf-8")).digest() != keyFile.read() :
+                errorLabel.config(text = "Incorrect Password / Decryption Algorithm")
                 errorLabel.pack(side = TOP, fill = X, expand = True)
                 return
-
 
         # if key is valid:
         # make directory to extract decrypted files
@@ -95,7 +111,7 @@ def decrypt(filePath, key):
 
             with encrFile.open(eachFile.filename, "r") as inputFile:
 
-                decrypter = AES.new(key, AES.MODE_CFB, 16 * "\x00")
+                decrypter = getDecrypter(key)
 
                 # if the parent directory of any files dosent exists, make directory
                 if not os.path.exists(os.path.dirname(os.path.join(decryptedFilePath, eachFile.filename))):
@@ -150,10 +166,20 @@ def validate():
     decrypt(filePathList[0], key)
 
 
+def toggleAdvanceControls():
+
+    if advanceControlButton['text'] == "\u22ce Show Advance Controls":
+        advanceControlButton.config(text = "\u22cf Hide Advance Controls")
+        decryptionOptionFrame.pack(side = TOP, fill = X, expand = True, padx = 10, pady = 10)
+
+    else:
+        advanceControlButton.config(text = "\u22ce Show Advance Controls")
+        decryptionOptionFrame.pack_forget()
+
+
 # get path of selected files
 filePathList = os.environ["NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"].split("\n")
 filePathList.pop()   # remove empty entry
-
 
 window = Tk()
 window.minsize(300, 150)
@@ -196,6 +222,28 @@ if len(filePathList) == 1 and os.path.isfile(filePathList[0]):
     ### Decrypt Button
     decryptButton = Button(window, text = "Decrypt", command = validate)
     decryptButton.pack(side = TOP, pady = 10)
+
+
+    ### Advance Controls Frame
+
+    advanceControlFrame = Frame(window)
+    advanceControlFrame.pack(side = TOP, fill = X, expand = True)
+
+    advanceControlButton = Button(advanceControlFrame, text = "\u22ce Show Advance Controls", font = ("arial", 9, "bold"), relief = FLAT, command = toggleAdvanceControls)
+    advanceControlButton.pack(side = TOP, fill = X, expand = True)
+
+    decryptionOptionFrame = LabelFrame(advanceControlFrame, text = " Encryption Algorithm ", font = ("arial", 9, "italic"))
+
+    selectedDecryptionMethod = IntVar()
+    selectedDecryptionMethod.set(1)
+    aesRadioButton = Radiobutton(decryptionOptionFrame, text = "AES", value = 1, variable = selectedDecryptionMethod, anchor = 'w')
+    aesRadioButton.pack(side = TOP, fill = X, expand = True)
+    rc2RadioButton = Radiobutton(decryptionOptionFrame, text = "RC2", value = 2, variable = selectedDecryptionMethod, anchor = 'w')
+    rc2RadioButton.pack(side = TOP, fill = X, expand = True)
+    blowfishRadioButton = Radiobutton(decryptionOptionFrame, text = "Blowfish", variable = selectedDecryptionMethod, value = 3, anchor = 'w')
+    blowfishRadioButton.pack(side = TOP, fill = X, expand = True)
+    des3RadioButton = Radiobutton(decryptionOptionFrame, text = "Triple DES", variable = selectedDecryptionMethod, value = 4, anchor = 'w')
+    des3RadioButton.pack(side = TOP, fill = X, expand = True)
 
 
     ### Progress frame
