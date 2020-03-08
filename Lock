@@ -60,6 +60,18 @@ def traverseDirectories(pathList):
         progressBar.update()
 
 
+def generateFileName(filePath, fileExtension):
+
+    if not os.path.exists(filePath + fileExtension) :
+        return filePath + fileExtension
+
+    counter = 1
+    while( os.path.exists( "{} ({}){}".format(filePath, counter, fileExtension)) ):
+        counter += 1
+
+    return "{} ({}){}".format(filePath, counter, fileExtension)
+
+
 def encrypt(filePathList, key):
 
     if len(filePathList) == 0 :
@@ -77,7 +89,7 @@ def encrypt(filePathList, key):
         encryptedFileName = "Encrypted " + time.ctime()
 
     # combine fileName and parent path
-    encryptedFilePath = os.path.join(encryptedFileDirectory, encryptedFileName + ".sdk")
+    encryptedFilePath = generateFileName(os.path.join(encryptedFileDirectory, encryptedFileName), ".sdk")
 
     # create encrypted file (zip) to store all encrypted files
     # and key.encr file

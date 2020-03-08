@@ -27,11 +27,23 @@ def padKey(key):
     return (key + "".join(padding)).encode("utf-8")
 
 
+def generateFileName(filePath, fileExtension):
+
+    if not os.path.exists(filePath + fileExtension) :
+        return filePath + fileExtension
+
+    counter = 1
+    while( os.path.exists( "{} ({}){}".format(filePath, counter, fileExtension)) ):
+        counter += 1
+
+    return "{} ({}){}".format(filePath, counter, fileExtension)
+
+
 def decrypt(filePath, key):
 
     # get decrypted file name and path
     decryptedFileName = os.path.splitext(os.path.basename(filePath))[0]
-    decryptedFilePath = os.path.join(os.path.dirname(filePath), decryptedFileName)
+    decryptedFilePath = generateFileName(os.path.join(os.path.dirname(filePath), decryptedFileName), "")
 
     # read encrypted file
     with zipfile.ZipFile(filePath, "r") as encrFile:
@@ -111,7 +123,7 @@ def decrypt(filePath, key):
     progressTitle.config(text = "Decrypted!!")
     progressTitle.update()
 
-    endMessage.config(text = "Decrypted into \"{}\" directory".format(decryptedFileName))
+    endMessage.config(text = "Decrypted into \"{}\" directory".format(os.path.relpath(decryptedFilePath)))
     endMessage.pack(side = TOP, fill = X, expand = True, padx = 10, pady = 10)
 
 
