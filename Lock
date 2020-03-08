@@ -1,6 +1,9 @@
 #!/usr/bin/python3
 
 import Crypto.Cipher.AES as AES
+import Crypto.Cipher.ARC2 as RC2
+import Crypto.Cipher.Blowfish as Blowfish
+import Crypto.Cipher.DES3 as DES3
 import Crypto.Hash.SHA256 as SHA256
 
 import string, random, os, time, zipfile
@@ -72,6 +75,20 @@ def generateFileName(filePath, fileExtension):
     return "{} ({}){}".format(filePath, counter, fileExtension)
 
 
+def getEncrypter(key):
+
+    encryptionType = selectedEncryptionMethod.get()
+
+    if encryptionType == 1:
+        return AES.new(key, AES.MODE_CFB, 16 * "\x00")
+    elif encryptionType == 2:
+        return RC2.new(key, RC2.MODE_CFB, 8 * "\x00")
+    elif encryptionType == 3:
+        return Blowfish.new(key, Blowfish.MODE_CFB, 8 * "\x00")
+    elif encryptionType == 4:
+        return DES3.new(key, DES3.MODE_CFB, 8 * "\x00")
+
+
 def encrypt(filePathList, key):
 
     if len(filePathList) == 0 :
@@ -98,11 +115,12 @@ def encrypt(filePathList, key):
         # create key.encr file
         with zipFile.open("key.encr", "w") as keyFile:
             keyFile.write(SHA256.new(key).digest())
+            keyFile.write(SHA256.new(str(selectedEncryptionMethod.get()).encode("utf-8")).digest())
 
         # encrypt all files
         for eachFilePath in traverseDirectories(filePathList):
 
-            encrypter = AES.new(key, AES.MODE_CFB, 16 * "\x00")
+            encrypter = getEncrypter(key)
 
             with open(eachFilePath, "rb") as inputFile:
 
@@ -156,10 +174,20 @@ def validate():
     encrypt(filePathList, key)
 
 
+def toggleAdvanceControls():
+
+    if advanceControlButton['text'] == "\u22ce Show Advance Controls":
+        advanceControlButton.config(text = "\u22cf Hide Advance Controls")
+        encryptionOptionFrame.pack(side = TOP, fill = X, expand = True, padx = 10, pady = 10)
+
+    else:
+        advanceControlButton.config(text = "\u22ce Show Advance Controls")
+        encryptionOptionFrame.pack_forget()
+
+
 # get path of selected files
 filePathList = os.environ["NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"].split("\n")
 filePathList.pop()   # remove empty entry
-
 
 window = Tk()
 window.minsize(300, 300)
@@ -212,6 +240,28 @@ keyEntry.pack(side = LEFT)
 
 encryptButton = Button(window, text = "Encrypt", command = validate)
 encryptButton.pack(side = TOP, pady = 10)
+
+
+### Advance Controls Frame
+
+advanceControlFrame = Frame(window)
+advanceControlFrame.pack(side = TOP, fill = X, expand = True)
+
+advanceControlButton = Button(advanceControlFrame, text = "\u22ce Show Advance Controls", font = ("arial", 9, "bold"), relief = FLAT, command = toggleAdvanceControls)
+advanceControlButton.pack(side = TOP, fill = X, expand = True)
+
+encryptionOptionFrame = LabelFrame(advanceControlFrame, text = " Encryption Algorithm ", font = ("arial", 9, "italic"))
+
+selectedEncryptionMethod = IntVar()
+selectedEncryptionMethod.set(1)
+aesRadioButton = Radiobutton(encryptionOptionFrame, text = "AES", value = 1, variable = selectedEncryptionMethod, anchor = 'w')
+aesRadioButton.pack(side = TOP, fill = X, expand = True)
+rc2RadioButton = Radiobutton(encryptionOptionFrame, text = "RC2", value = 2, variable = selectedEncryptionMethod, anchor = 'w')
+rc2RadioButton.pack(side = TOP, fill = X, expand = True)
+blowfishRadioButton = Radiobutton(encryptionOptionFrame, text = "Blowfish", variable = selectedEncryptionMethod, value = 3, anchor = 'w')
+blowfishRadioButton.pack(side = TOP, fill = X, expand = True)
+des3RadioButton = Radiobutton(encryptionOptionFrame, text = "Triple DES", variable = selectedEncryptionMethod, value = 4, anchor = 'w')
+des3RadioButton.pack(side = TOP, fill = X, expand = True)
 
 
 ### Error Label
